@@ -1,4 +1,6 @@
 #include <bits/stdc++.h>
+#include <sys/resource.h>
+
 using namespace std;
 
 struct Edge {
@@ -216,17 +218,85 @@ vector<int> findDensestSubgraph(const vector<vector<int>>& adj) {
     return densestSubgraph;
 }
 
-vector<vector<int>> buildGraphFromInput(FILE *file);
-
-int main() {
-
-    vector<vector<int>> adj = buildGraphFromInput(nullptr); // fix later
-
-    for (int u = 0; u < adj.size(); u++) {
-        sort(adj[u].begin(), adj[u].end());
+vector<vector<int>> buildGraphFromInput(const string& filename) {
+    ifstream file(filename);
+    if (!file.is_open()) {
+        cerr << "Error opening file " << filename << endl;
+        exit(1);
     }
 
+    set<pair<int, int>> unique_edges;
+    int u, v;
+    int maxV = 0;
+    string line;
+
+    while (getline(file, line)) {
+        if (line.empty() || line[0] == '#')
+            continue;
+
+        stringstream ss(line);
+        if (ss >> u >> v) {
+            if (u == v) continue;
+            if (u > v) swap(u, v); // Normalize to ensure undirected uniqueness
+            unique_edges.insert({u, v});
+            maxV = max({u, v, maxV});
+        }
+    }
+    int numVertices = maxV + 1;
+    cout << "Graph info: " << numVertices << " vertices, " << unique_edges.size() << " unique edges\n";
+
+    vector<vector<int>> graph(numVertices);
+
+    for (const auto& edge : unique_edges) {
+        int u = edge.first, v = edge.second;
+        graph[u].push_back(v);
+        graph[v].push_back(u);
+    }
+
+    // sort adj lists once for triangle intersection finding
+    for (int i = 0; i < numVertices; i++)
+        sort(graph[i].begin(), graph[i].end());
+
+    return graph;
+}
+
+void display_memory_usage() {
+    struct rusage usage;
+    getrusage(RUSAGE_SELF, &usage);
+
+    // cout << "Peak memory usage: " << usage.ru_maxrss / (1024 * 1024) << "MB" << endl; // for macos, unit is in bytes
+    cout << "Peak memory usage: " << usage.ru_maxrss / 1024 << "MB" << endl; // for linux, unit is in kb, uncomment this line
+}
+
+int main(int argc, char* argv[]) {
+
+    string filename = "placeholder.txt";
+    if (argc > 1)
+        filename = argv[1];
+
+    vector<vector<int>> adj = buildGraphFromInput(filename);
+
+    auto start = chrono::high_resolution_clock::now();
     vector<int> DS = findDensestSubgraph(adj);
+    auto end = chrono::high_resolution_clock::now();
+
+    chrono::duration<double> diff = end - start;
+    cout << "Densest Subgraph found in " << diff.count() << " seconds." << endl;
+
+    display_memory_usage();
+
+    // get only neighbours in DS
+    unordered_set<int> inDS(DS.begin(), DS.end());
+
+    // output
+    cout << "Nodes which are part of densest subgraph: \n";
+    for (const int& node: DS) {
+        cout << "Node: " << node << " , connected to vertices: ";
+        for (const int& nbr: adj[node])
+            if (inDS.count(nbr))
+                cout << nbr << " ";
+        cout << endl;
+    }
 
     return 0;
 }
