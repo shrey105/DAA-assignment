@@ -98,26 +98,11 @@ vector<array<int, 3>> getTriangles(int n, const vector<vector<int>>& adj) {
     return triangles;
 }
 
-FlowNetwork buildFlowNetwork(int n, const vector<vector<int>>& adj, const vector<array<int, 3>>& triangles, double alpha) {
+FlowNetwork buildFlowNetwork(int n, const vector<vector<int>>& adj, const map<pair<int, int>, int>& edge_ids, const vector<array<int, 3>>& triangles, const vector<int>& tri_deg, double alpha) {
     static const double INF = 1e18;
-
-    // find triangle degree
-    vector<int> tri_deg(n, 0);
-    for (const auto &tri: triangles) {
-        tri_deg[tri[0]]++;
-        tri_deg[tri[1]]++;
-        tri_deg[tri[2]]++;   
-    }
     
-    // map edge to ids
-    map<pair<int, int>, int> edge_ids {};
-    int eid = 0;
-    for (int u = 0; u < n; u++)
-        for (const int& v: adj[u])
-            if (u < v)
-                edge_ids[{u, v}] = eid++;
-    
-    int N = n + eid;
+    const int edges = edge_ids.size();
+    int N = n + edges;
     int s = N, t = N + 1;
     FlowNetwork fn(N + 2);
 
@@ -146,9 +131,9 @@ FlowNetwork buildFlowNetwork(int n, const vector<vector<int>>& adj, const vector
 
     for (const auto& tri: triangles) {
         int u = tri[0], v = tri[1], w = tri[2];
-        int e_uv = n + edge_ids[min_max_pair(u, v)];
-        int e_vw = n + edge_ids[min_max_pair(v, w)];
-        int e_uw = n + edge_ids[min_max_pair(u, w)];
+        int e_uv = n + edge_ids.at(min_max_pair(u, v));
+        int e_vw = n + edge_ids.at(min_max_pair(v, w));
+        int e_uw = n + edge_ids.at(min_max_pair(u, w));
 
         fn.addEdge(u, e_vw, 1);
         fn.addEdge(v, e_uw, 1);
@@ -180,6 +165,7 @@ vector<bool> minCutReachable(int s, FlowNetwork& fn) {
 vector<int> findDensestSubgraph(const vector<vector<int>>& adj) {
     int n = adj.size();
 
+    // compute triangle degrees only once
     vector<array<int, 3>> triangles = getTriangles(n, adj);
     vector<int> tri_deg(n, 0);
     for (const auto &tri: triangles) {
@@ -187,6 +173,14 @@ vector<int> findDensestSubgraph(const vector<vector<int>>& adj) {
         tri_deg[tri[1]]++;
         tri_deg[tri[2]]++;   
     }
+
+    // map edge to ids
+    map<pair<int, int>, int> edge_ids {};
+    int eid = 0;
+    for (int u = 0; u < n; u++)
+        for (const int& v: adj[u])
+            if (u < v)
+                edge_ids[{u, v}] = eid++;
 
     double u = 0, l = 0;
     for (int i = 0; i < n; i++) {
@@ -198,7 +192,7 @@ vector<int> findDensestSubgraph(const vector<vector<int>>& adj) {
     while (u - l > 1.0 / (n * (n - 1))) {
         double alpha = (l + u) / 2.0;
         
-        FlowNetwork fn = buildFlowNetwork(n, adj, triangles, alpha);
+        FlowNetwork fn = buildFlowNetwork(n, adj, edge_ids, triangles, tri_deg, alpha);
         int s = fn.N - 2, t = fn.N - 1;
 
         double maxflow = edmondsKarp(s, t, fn);
