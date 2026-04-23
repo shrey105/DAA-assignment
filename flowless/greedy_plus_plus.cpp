@@ -8,6 +8,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+
 using namespace std;
 
 struct Graph {
@@ -34,7 +35,12 @@ DensestSubgraph greedy_plus_plus(const Graph& G, int T) {
     vector<long long> load(n, 0LL);
 
     DensestSubgraph best;
-    best.density = 0.0;
+    best.density = (G.n > 0) ? (double) G.m / G.n : 0.0;
+    best.nodes.resize(G.n);
+    best.nodes.clear();
+    for (int i = 0; i < n; i++) {
+        best.nodes.push_back(i);
+    }
 
     for (int iter = 1; iter <= T; ++iter) {
         vector<int> cur_deg(n);
@@ -98,7 +104,6 @@ DensestSubgraph greedy_plus_plus(const Graph& G, int T) {
                 double rho = static_cast<double>(H_edges) / H_size;
                 if (rho > best.density) {
                     best.density = rho;
-                    // Collect surviving nodes
                     best.nodes.clear();
                     for (int v = 0; v < n; ++v)
                         if (alive[v])
