@@ -7,6 +7,8 @@ struct Edge {
     int to;
     double res_cap;
     int rev_idx;
+
+    Edge(int to, double res_cap, int rev_idx) : to(to), res_cap(res_cap), rev_idx(rev_idx) {}
 };  
 
 class FlowNetwork {
@@ -17,8 +19,8 @@ public:
     FlowNetwork(int n) : N{n}, graph{n} {}
 
     void addEdge(int u, int v, double cap) {
-        graph[u].emplace_back(v, cap, graph[v].size());
-        graph[v].emplace_back(u, 0.0, graph[u].size() - 1);
+        graph[u].emplace_back(v, cap, (int) graph[v].size());
+        graph[v].emplace_back(u, 0.0, (int) graph[u].size() - 1);
     }
 };
 
@@ -84,7 +86,7 @@ vector<array<int, 3>> getTriangles(int n, const vector<vector<int>>& adj) {
                 if (adj[u][i] == adj[v][j]) {
                     int w = adj[u][i];
                     if (w > v) {
-                        triangles.emplace_back(u, v, w);
+                        triangles.push_back({u, v, w});
                     }
                     i++; j++;
                 }
