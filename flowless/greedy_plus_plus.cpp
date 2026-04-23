@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <iostream>
 #include <queue>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -12,21 +13,22 @@
 using namespace std;
 
 struct Graph {
-    int n;                   // number of vertices
-    int m;                   // number of edges
-    vector<vector<int>> adj; // adjacency list
+    int n;
+    int m;
+    vector<vector<int>> adj;
 
-    Graph(int n, int m) : n(n), m(m), adj(n) {}
+    Graph(int n) : n(n), m(0), adj(n) {}
 
     void add_edge(int u, int v) {
         adj[u].push_back(v);
         adj[v].push_back(u);
+        m++;
     }
 };
 
 struct DensestSubgraph {
     double density;
-    vector<int> nodes; // nodes in the densest subgraph found
+    vector<int> nodes;
 };
 
 DensestSubgraph greedy_plus_plus(const Graph& G, int T) {
@@ -35,45 +37,45 @@ DensestSubgraph greedy_plus_plus(const Graph& G, int T) {
     vector<long long> load(n, 0LL);
 
     DensestSubgraph best;
-    best.density = (G.n > 0) ? (double) G.m / G.n : 0.0;
-    best.nodes.resize(G.n);
-    best.nodes.clear();
-    for (int i = 0; i < n; i++) {
-        best.nodes.push_back(i);
-    }
+    best.density = (n > 0) ? (double) G.m / n : 0.0;
+    best.nodes.resize(n);
+    for (int i = 0; i < n; i++)
+        best.nodes[i] = i;
+
+    vector<int> cur_deg(n);
+    vector<bool> alive(n);
+    vector<int> peeling_order;
+    peeling_order.reserve(n);
 
     for (int iter = 1; iter <= T; ++iter) {
-        vector<int> cur_deg(n);
-        for (int v = 0; v < n; ++v)
-            cur_deg[v] = static_cast<int>(G.adj[v].size());
+        // initialize
+        for (int v = 0; v < n; ++v) {
+            cur_deg[v] = (int) G.adj[v].size();
+            alive[v] = true;
+        }
 
-        // alive[v] = true if v has not been peeled yet
-        vector<bool> alive(n, true);
+        peeling_order.clear();
 
-        // peeling_order[i] = vertex removed at step i
-        vector<int> peeling_order;
-        peeling_order.reserve(n);
-
-        // Track which vertices are still in H for density computation
         int H_size = n;
         long long H_edges = G.m;
 
-        // pq ordered by (load + cur_deg)
         using PQEntry = pair<long long, int>;
         priority_queue<PQEntry, vector<PQEntry>, greater<PQEntry>> pq;
 
         for (int v = 0; v < n; ++v)
             pq.push({load[v] + cur_deg[v], v});
 
-        // new_load[v] = load accumulated in this iteration
         vector<long long> new_load(n, 0LL);
 
+        double best_iter_density = best.density;
+        int best_cut = -1; // number of removed nodes at best point
+
+        int removed = 0;
+
         while (!pq.empty()) {
-            // Find vertex u with minimum (load + cur_deg)
             auto [key, u] = pq.top();
             pq.pop();
 
-            // Skip stale entries (lazy deletion)
             if (!alive[u])
                 continue;
             if (key != load[u] + cur_deg[u]) {
@@ -81,103 +83,102 @@ DensestSubgraph greedy_plus_plus(const Graph& G, int T) {
                 continue;
             }
 
-            // Record the load assigned in this iteration
             new_load[u] = load[u] + cur_deg[u];
 
-            // Remove u and its adjacent edges from H
             alive[u] = false;
             peeling_order.push_back(u);
+            removed++;
 
-            H_edges -= cur_deg[u]; // edges leaving with u
-            H_size -= 1;
+            H_edges -= cur_deg[u];
+            H_size--;
 
             for (int nb : G.adj[u]) {
                 if (!alive[nb])
                     continue;
                 cur_deg[nb]--;
-                // Push updated entry when key for nb changes
                 pq.push({load[nb] + cur_deg[nb], nb});
             }
 
-            // Check density of remaining H
             if (H_size > 0) {
-                double rho = static_cast<double>(H_edges) / H_size;
-                if (rho > best.density) {
-                    best.density = rho;
-                    best.nodes.clear();
-                    for (int v = 0; v < n; ++v)
-                        if (alive[v])
-                            best.nodes.push_back(v);
+                double rho = (double) H_edges / H_size;
+                if (rho > best_iter_density) {
+                    best_iter_density = rho;
+                    best_cut = removed;
                 }
             }
         }
 
-        // Update load vector for the next iteration
-        load = new_load;
+        // reconstruct candidate ONCE
+        vector<bool> removed_flag(n, false);
+        for (int i = 0; i < best_cut; ++i)
+            removed_flag[peeling_order[i]] = true;
+
+        vector<int> candidate;
+        candidate.reserve(n);
+        for (int v = 0; v < n; ++v)
+            if (!removed_flag[v])
+                candidate.push_back(v);
+
+        if (best_iter_density > best.density) {
+            best.density = best_iter_density;
+            best.nodes.swap(candidate);
+        }
+
+        load.swap(new_load);
     }
 
     return best;
 }
 
 Graph read_graph(const string& filename) {
-    ifstream fin(filename);
-    if (!fin.is_open()) {
-        cerr << "Error: cannot open file " << filename << "\n";
+    ifstream file(filename);
+    if (!file.is_open()) {
+        cerr << "Error opening file " << filename << "\n";
         exit(1);
     }
 
-    int n, m;
-    fin >> n >> m;
+    vector<pair<int, int>> edges;
+    int u, v, maxV = 0;
+    string line;
 
-    Graph G(n, m);
-    for (int i = 0; i < m; ++i) {
-        int u, v;
-        fin >> u >> v;
-        if (u != v) // skip self-loops
-            G.add_edge(u, v);
+    while (getline(file, line)) {
+        if (line.empty() || line[0] == '#')
+            continue;
+
+        stringstream ss(line);
+        if (ss >> u >> v) {
+            if (u == v)
+                continue;
+            if (u > v)
+                swap(u, v); // normalize
+            edges.emplace_back(u, v);
+            maxV = max(maxV, max(u, v));
+        }
     }
-    return G;
-}
 
-Graph make_example_graph() {
-    // Vertices 0..1 on left of bipartite, 2..11 on right, 12..15 form K_4
-    const int n = 16;
-    const int m_dummy = 0; // will be overwritten
-    Graph G(n, m_dummy);
-    G.m = 0;
+    // sort + deduplicate (O(m log m), but cache-friendly and much faster than set)
+    sort(edges.begin(), edges.end());
+    edges.erase(unique(edges.begin(), edges.end()), edges.end());
 
-    // K_{2,10}
-    for (int l = 0; l < 2; ++l)
-        for (int r = 2; r < 12; ++r) {
-            G.add_edge(l, r);
-            G.m++;
-        }
+    Graph G(maxV + 1);
 
-    // K_4
-    for (int u = 12; u < 16; ++u)
-        for (int v = u + 1; v < 16; ++v) {
-            G.add_edge(u, v);
-            G.m++;
-        }
+    for (auto& [a, b] : edges)
+        G.add_edge(a, b);
 
     return G;
 }
 
 int main(int argc, char* argv[]) {
-    ios::sync_with_stdio(false);
     cin.tie(nullptr);
 
-    Graph G(0, 0);
-    int T = 10; // default iteration count
+    Graph G(0);
+    int T = 10;
 
     if (argc >= 3) {
         G = read_graph(argv[1]);
         T = atoi(argv[2]);
     } else if (argc == 2) {
         G = read_graph(argv[1]);
-    } else {
-        cout << "No input file given — running on built-in example graph.\n\n";
-        G = make_example_graph();
     }
 
     cout << "Graph: n=" << G.n << "  m=" << G.m
@@ -194,7 +195,6 @@ int main(int argc, char* argv[]) {
     cout << "  Density : " << fixed << setprecision(6) << result.density << "\n";
     cout << "  Size    : " << result.nodes.size() << " nodes\n";
 
-    // Print nodes only for small graphs
     if (G.n <= 50 && !result.nodes.empty()) {
         cout << "  Nodes   : ";
         for (int v : result.nodes)
@@ -202,6 +202,6 @@ int main(int argc, char* argv[]) {
         cout << "\n";
     }
 
-    cout << "\nRuntime : " << fixed << setprecision(3) << elapsed_ms << " ms\n";
+    cout << "Runtime : " << fixed << setprecision(3) << elapsed_ms << " ms\n";
     return 0;
 }
