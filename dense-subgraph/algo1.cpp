@@ -24,6 +24,62 @@ public:
     }
 };
 
+double dinic(int s, int t, FlowNetwork& fn) {
+    int N = fn.N;
+    vector<int> level(N), ptr(N);
+
+    const double INF = 1e18;
+
+    auto bfs = [&]() -> bool {
+        fill(level.begin(), level.end(), -1);
+        queue<int> q;
+        q.push(s);
+        level[s] = 0;
+
+        while (!q.empty()) {
+            int u = q.front(); q.pop();
+            for (auto &e : fn.graph[u]) {
+                if (level[e.to] == -1 && e.res_cap > 1e-9) {
+                    level[e.to] = level[u] + 1;
+                    q.push(e.to);
+                }
+            }
+        }
+        return level[t] != -1;
+    };
+
+    function<double(int, double)> dfs = [&](int u, double pushed) -> double {
+        if (pushed < 1e-9) return 0.0;
+        if (u == t) return pushed;
+
+        for (int &cid = ptr[u]; cid < (int)fn.graph[u].size(); cid++) {
+            Edge &e = fn.graph[u][cid];
+
+            if (level[e.to] != level[u] + 1 || e.res_cap < 1e-9)
+                continue;
+
+            double tr = dfs(e.to, min(pushed, e.res_cap));
+            if (tr < 1e-9) continue;
+
+            e.res_cap -= tr;
+            fn.graph[e.to][e.rev_idx].res_cap += tr;
+            return tr;
+        }
+        return 0.0;
+    };
+
+    double flow = 0.0;
+
+    while (bfs()) {
+        fill(ptr.begin(), ptr.end(), 0);
+        while (double pushed = dfs(s, INF)) {
+            flow += pushed;
+        }
+    }
+
+    return flow;
+}
+
 double edmondsKarp(int s, int t, FlowNetwork& fn) {
     double maxflow = 0.0;
 
@@ -184,18 +240,21 @@ vector<int> findDensestSubgraph(const vector<vector<int>>& adj) {
 
     double u = 0, l = 0;
     for (int i = 0; i < n; i++) {
-        u = max(u, (double) tri_deg[i] / 3.0);
+        u = max(u, (double) tri_deg[i]);
     }
 
     vector<int> densestSubgraph {};
+    
+    while (u - l > 1.0 / (1.0 * n * (n - 1))) {
+        double alpha = l + (u - l) / 2.0;        
+        cout << "Building flow network with alpha = " << alpha << endl;
 
-    while (u - l > 1.0 / (n * (n - 1))) {
-        double alpha = (l + u) / 2.0;
-        
         FlowNetwork fn = buildFlowNetwork(n, adj, edge_ids, triangles, tri_deg, alpha);
         int s = fn.N - 2, t = fn.N - 1;
 
-        double maxflow = edmondsKarp(s, t, fn);
+        // double maxflow = edmondsKarp(s, t, fn);
+        double maxflow = dinic(s, t, fn);
+        cout << "Max flow = " << maxflow << endl;
 
         vector<bool> reachable = minCutReachable(s, fn);
 
