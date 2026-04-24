@@ -16,8 +16,9 @@ struct Graph {
     int n;
     int m;
     vector<vector<int>> adj;
+    vector<int> rev_map;
 
-    Graph(int n) : n(n), m(0), adj(n) {}
+    Graph(int n) : n(n), m(0), adj(n), rev_map(n) {}
 
     void add_edge(int u, int v) {
         adj[u].push_back(v);
@@ -68,7 +69,7 @@ DensestSubgraph greedy_plus_plus(const Graph& G, int T) {
         vector<long long> new_load(n, 0LL);
 
         double best_iter_density = best.density;
-        int best_cut = -1; // number of removed nodes at best point
+        int best_cut = -1;
 
         int removed = 0;
 
@@ -108,7 +109,6 @@ DensestSubgraph greedy_plus_plus(const Graph& G, int T) {
             }
         }
 
-        // reconstruct candidate ONCE
         vector<bool> removed_flag(n, false);
         for (int i = 0; i < best_cut; ++i)
             removed_flag[peeling_order[i]] = true;
@@ -130,6 +130,23 @@ DensestSubgraph greedy_plus_plus(const Graph& G, int T) {
     return best;
 }
 
+int count_subgraph_edges(const Graph& G, const vector<int>& nodes) {
+    vector<bool> inS(G.n, false);
+    for (int v : nodes)
+        inS[v] = true;
+
+    int count = 0;
+
+    for (int v : nodes) {
+        for (int nb : G.adj[v]) {
+            if (inS[nb])
+                count++;
+        }
+    }
+
+    return count / 2;
+}
+
 Graph read_graph(const string& filename) {
     ifstream file(filename);
     if (!file.is_open()) {
@@ -138,7 +155,10 @@ Graph read_graph(const string& filename) {
     }
 
     vector<pair<int, int>> edges;
-    int u, v, maxV = 0;
+    unordered_map<int, int> id_map;
+    int next_id = 0;
+
+    int u, v;
     string line;
 
     while (getline(file, line)) {
@@ -146,21 +166,34 @@ Graph read_graph(const string& filename) {
             continue;
 
         stringstream ss(line);
-        if (ss >> u >> v) {
-            if (u == v)
-                continue;
-            if (u > v)
-                swap(u, v); // normalize
-            edges.emplace_back(u, v);
-            maxV = max(maxV, max(u, v));
-        }
+        if (!(ss >> u >> v))
+            continue;
+        if (u == v)
+            continue;
+
+        // assign compressed IDs
+        if (!id_map.count(u))
+            id_map[u] = next_id++;
+        if (!id_map.count(v))
+            id_map[v] = next_id++;
+
+        int cu = id_map[u];
+        int cv = id_map[v];
+
+        if (cu > cv)
+            swap(cu, cv);
+        edges.emplace_back(cu, cv);
     }
 
-    // sort + deduplicate (O(m log m), but cache-friendly and much faster than set)
     sort(edges.begin(), edges.end());
     edges.erase(unique(edges.begin(), edges.end()), edges.end());
 
-    Graph G(maxV + 1);
+    int n = next_id;
+    Graph G(n);
+
+    for (auto& [orig, comp] : id_map) {
+        G.rev_map[comp] = orig;
+    }
 
     for (auto& [a, b] : edges)
         G.add_edge(a, b);
@@ -172,36 +205,53 @@ int main(int argc, char* argv[]) {
     cin.tie(nullptr);
 
     Graph G(0);
-    int T = 10;
+    int T = 5;
 
-    if (argc >= 3) {
+    if (argc >= 2) {
         G = read_graph(argv[1]);
-        T = atoi(argv[2]);
-    } else if (argc == 2) {
-        G = read_graph(argv[1]);
+    } else {
+        cerr << "Usage: " << argv[0] << " <input_file> [T] [output_file]\n";
+        return 1;
     }
 
-    cout << "Graph: n=" << G.n << "  m=" << G.m
-         << "  iterations=" << T << "\n\n";
+    if (argc >= 3) {
+        T = stoi(argv[2]);
+    }
+
+    ostream* out = &cout;
+    ofstream outfile;
+
+    if (argc >= 4) {
+        outfile.open(argv[3]);
+        if (!outfile.is_open()) {
+            cerr << "Error opening output file\n";
+            return 1;
+        }
+        out = &outfile;
+    }
+
+    *out
+        << "Graph: n=" << G.n << "  m=" << G.m
+        << "  iterations=" << T << "\n\n";
 
     auto start = chrono::high_resolution_clock::now();
     DensestSubgraph result = greedy_plus_plus(G, T);
     auto end = chrono::high_resolution_clock::now();
 
-    double elapsed_ms =
-        chrono::duration<double, milli>(end - start).count();
+    double elapsed_ms = chrono::duration<double, milli>(end - start).count();
 
-    cout << "Densest subgraph found:\n";
-    cout << "  Density : " << fixed << setprecision(6) << result.density << "\n";
-    cout << "  Size    : " << result.nodes.size() << " nodes\n";
+    int subgraph_edges = count_subgraph_edges(G, result.nodes);
 
-    if (G.n <= 50 && !result.nodes.empty()) {
-        cout << "  Nodes   : ";
-        for (int v : result.nodes)
-            cout << v << " ";
-        cout << "\n";
-    }
+    *out << "Densest subgraph found:\n";
+    *out << "  Density : " << fixed << setprecision(6) << result.density << "\n";
+    *out << "  Size    : " << result.nodes.size() << " nodes\n";
+    *out << "  Edges   : " << subgraph_edges << endl;
 
-    cout << "Runtime : " << fixed << setprecision(3) << elapsed_ms << " ms\n";
+    *out << "  Nodes   : ";
+    for (int v : result.nodes)
+        *out << G.rev_map[v] << " ";
+    *out << "\n";
+
+    *out << "Runtime : " << fixed << setprecision(3) << elapsed_ms << " ms\n";
     return 0;
 }
