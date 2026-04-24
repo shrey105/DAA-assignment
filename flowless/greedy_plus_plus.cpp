@@ -201,6 +201,13 @@ Graph read_graph(const string& filename) {
     return G;
 }
 
+void display_memory_usage(ostream& out) {
+    struct rusage usage;
+    getrusage(RUSAGE_SELF, &usage);
+    out << "Peak memory usage: " << usage.ru_maxrss / (1024 * 1024) << "MB" << endl; // for mac
+    // out << "Peak memory usage: " << usage.ru_maxrss / 1024 << "MB" << endl;          // for linux
+}
+
 int main(int argc, char* argv[]) {
     cin.tie(nullptr);
 
@@ -253,5 +260,8 @@ int main(int argc, char* argv[]) {
     *out << "\n";
 
     *out << "Runtime : " << fixed << setprecision(3) << elapsed_ms << " ms\n";
+    display_memory_usage(*out);
+
+    cout << "Results printed to output file.\n";
     return 0;
 }
