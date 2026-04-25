@@ -29,7 +29,7 @@ public:
     int N;
     vector<vector<Edge>> graph;
 
-    FlowNetwork(int n) : N{n}, graph{n} {}
+    FlowNetwork(int n) : N{n}, graph{(size_t)n} {}
 
     void addEdge(int u, int v, double cap) {
         graph[u].emplace_back(v, cap, (int) graph[v].size());
