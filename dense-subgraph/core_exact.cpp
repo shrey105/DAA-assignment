@@ -536,12 +536,12 @@ vector<vector<int>> buildGraphFromInput(const string& filename) {
     return graph;
 }
 
-void display_memory_usage() {
+void display_memory_usage(ofstream& out) {
     struct rusage usage;
     getrusage(RUSAGE_SELF, &usage);
 
     // cout << "Peak memory usage: " << usage.ru_maxrss / (1024 * 1024) << "MB" << endl; // for macos, unit is in bytes
-    cout << "Peak memory usage: " << usage.ru_maxrss / 1024 << "MB" << endl; // for linux, unit is in kb, uncomment this line
+    out << "Peak memory usage: " << usage.ru_maxrss / 1024 << "MB" << endl; // for linux, unit is in kb, uncomment this line
 }
 
 int main(int argc, char* argv[]) {
@@ -559,7 +559,7 @@ int main(int argc, char* argv[]) {
     chrono::duration<double> diff = end - start;
     cout << "Densest Subgraph found in " << diff.count() << " seconds." << endl;
 
-    display_memory_usage();
+    
 
     // get only neighbours in DS
     unordered_set<int> inDS(DS.begin(), DS.end());
@@ -567,15 +567,39 @@ int main(int argc, char* argv[]) {
     // output
     string outfile = filename.substr(0, filename.find_last_of('.')) + "_result.txt";
     ofstream out(outfile);
+
+    int triangle_count = 0;
+    
+    display_memory_usage(out);
+
+    for (const int& u: DS) {
+        for (int v : adj[u]) if (v > u && inDS.count(v)) {
+            int i = 0, j = 0;
+            const auto& au = adj[u];
+            const auto& av = adj[v];
+
+            while (i < au.size() && j < av.size()) {
+                if (au[i] == av[j]) {
+                    int w = au[i];
+                    if (w > v && inDS.count(w)) {
+                        triangle_count++;
+                    }
+                    i++; j++;
+                } else if (au[i] < av[j]) i++;
+                else j++;
+            }
+        }
+    }
+
+    double density = DS.empty() ? 0.0 : (double)triangle_count / DS.size();
+
+    out << "Clique density of densest subgraph: " << density << endl;
     out << "Densest Subgraph found in " << diff.count() << " seconds.\n";
     out << "Nodes which are part of densest subgraph: \n";
     for (const int& node: DS) {
-        out << "Node: " << node << " , connected to vertices: ";
-        for (const int& nbr: adj[node])
-            if (inDS.count(nbr))
-                out << nbr << " ";
-        out << "\n";
+        out << node << " ";
     }
+    out << "\n";
     out.close();
     cout << "Results written to " << outfile << endl;
 
