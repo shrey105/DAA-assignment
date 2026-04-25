@@ -204,8 +204,8 @@ Graph read_graph(const string& filename) {
 void display_memory_usage(ostream& out) {
     struct rusage usage;
     getrusage(RUSAGE_SELF, &usage);
-    out << "Peak memory usage: " << usage.ru_maxrss / (1024 * 1024) << "MB" << endl; // for mac
-    // out << "Peak memory usage: " << usage.ru_maxrss / 1024 << "MB" << endl;          // for linux
+    // out << "Peak memory usage: " << usage.ru_maxrss / (1024 * 1024) << "MB" << endl; // for mac
+    out << "Peak memory usage: " << usage.ru_maxrss / 1024 << "MB" << endl; // for linux
 }
 
 int main(int argc, char* argv[]) {
