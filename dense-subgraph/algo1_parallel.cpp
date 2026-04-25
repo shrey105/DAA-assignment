@@ -14,6 +14,7 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+#include <thread>
 
 using namespace std;
 
@@ -75,7 +76,7 @@ void* triangleWorker(void* arg) {
 }
 
 vector<array<int, 3>> getTriangles(int n, const vector<vector<int>>& adj) {
-    int num_threads = pthread_getconcurrency();
+    int num_threads = std::thread::hardware_concurrency();
     if (num_threads <= 0)
         num_threads = 4; // fallback
 
@@ -431,15 +432,37 @@ int main(int argc, char* argv[]) {
     // get only neighbours in DS
     unordered_set<int> inDS(DS.begin(), DS.end());
 
+    // calc density
+    int triangle_count = 0;
+
+    for (const int& u: DS) {
+        for (int v : adj[u]) if (v > u && inDS.count(v)) {
+            int i = 0, j = 0;
+            const auto& au = adj[u];
+            const auto& av = adj[v];
+
+            while (i < au.size() && j < av.size()) {
+                if (au[i] == av[j]) {
+                    int w = au[i];
+                    if (w > v && inDS.count(w)) {
+                        triangle_count++;
+                    }
+                    i++; j++;
+                } else if (au[i] < av[j]) i++;
+                else j++;
+            }
+        }
+    }
+
+    double density = DS.empty() ? 0.0 : (double)triangle_count / DS.size();
+
     // output
+    *out << "Clique density of densest subgraph: " << density << endl;
     *out << "Nodes which are part of densest subgraph: \n";
     for (const int& node : DS) {
-        *out << "Node: " << node << " , connected to vertices: ";
-        for (const int& nbr : adj[node])
-            if (inDS.count(nbr))
-                *out << nbr << " ";
-        *out << endl;
+        *out << node << " ";
     }
+    *out << endl;
 
     return 0;
 }
