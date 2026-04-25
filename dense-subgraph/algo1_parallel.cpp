@@ -296,7 +296,7 @@ FlowNetwork buildFlowNetwork(int n, const vector<vector<int>>& adj, const unorde
     return fn;
 }
 
-vector<int> findDensestSubgraph(const vector<vector<int>>& adj, ostream& out) {
+vector<int> findDensestSubgraph(const vector<vector<int>>& adj) {
     int n = adj.size();
 
     // compute triangle degrees only once
@@ -333,7 +333,7 @@ vector<int> findDensestSubgraph(const vector<vector<int>>& adj, ostream& out) {
 
         // double maxflow = edmondsKarp(s, t, fn);
         double maxflow = dinic(s, t, fn);
-        out << "Max flow = " << maxflow << endl;
+        // cout << "Max flow = " << maxflow << endl;
 
         vector<bool> reachable = minCutReachable(s, fn);
 
@@ -421,7 +421,7 @@ int main(int argc, char* argv[]) {
     }
 
     auto start = chrono::high_resolution_clock::now();
-    vector<int> DS = findDensestSubgraph(adj, *out);
+    vector<int> DS = findDensestSubgraph(adj);
     auto end = chrono::high_resolution_clock::now();
 
     chrono::duration<double> diff = end - start;

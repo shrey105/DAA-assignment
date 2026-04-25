@@ -1,5 +1,18 @@
-#include <bits/stdc++.h>
+#include <algorithm>
+#include <array>
+#include <chrono>
+#include <cmath>
+#include <fstream>
+#include <functional>
+#include <iostream>
+#include <queue>
+#include <set>
+#include <sstream>
 #include <sys/resource.h>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 using namespace std;
 
@@ -154,7 +167,18 @@ vector<array<int, 3>> getTriangles(int n, const vector<vector<int>>& adj) {
     return triangles;
 }
 
-FlowNetwork buildFlowNetwork(int n, const vector<vector<int>>& adj, const map<pair<int, int>, int>& edge_ids, const vector<array<int, 3>>& triangles, const vector<int>& tri_deg, double alpha) {
+inline long long edgeKey(int u, int v) {
+    if (u > v) swap(u, v);
+    return ( (long long)u << 32 ) | v;
+}
+
+inline pair<int,int> decodeEdge(long long key) {
+    int u = key >> 32;
+    int v = key & 0xffffffff;
+    return {u, v};
+}
+
+FlowNetwork buildFlowNetwork(int n, const vector<vector<int>>& adj, const unordered_map<long long, int>& edge_ids, const vector<array<int, 3>>& triangles, const vector<int>& tri_deg, double alpha) {
     static const double INF = 1e18;
     
     const int edges = edge_ids.size();
@@ -175,14 +199,15 @@ FlowNetwork buildFlowNetwork(int n, const vector<vector<int>>& adj, const map<pa
 
     // edges-nodes -> vertices
     for (const auto& p: edge_ids) {
-        int u = p.first.first, v = p.first.second, e_node = n + p.second;
+        auto [u, v] = decodeEdge(p.first);
+        int e_node = n + p.second;
         fn.addEdge(e_node, u, INF);
         fn.addEdge(e_node, v, INF);
     }
 
     // triangle connections
-    const auto min_max_pair = [&](int u, int v) -> pair<int, int> {
-        return {min(u, v), max(u, v)};
+    const auto min_max_pair = [&](int u, int v) -> long long {
+        return edgeKey(min(u, v), max(u, v));
     };
 
     for (const auto& tri: triangles) {
@@ -231,12 +256,12 @@ vector<int> findDensestSubgraph(const vector<vector<int>>& adj) {
     }
 
     // map edge to ids
-    map<pair<int, int>, int> edge_ids {};
+    unordered_map<long long, int> edge_ids {};
     int eid = 0;
     for (int u = 0; u < n; u++)
         for (const int& v: adj[u])
             if (u < v)
-                edge_ids[{u, v}] = eid++;
+                edge_ids[edgeKey(u, v)] = eid++;
 
     double u = 0, l = 0;
     for (int i = 0; i < n; i++) {
@@ -245,7 +270,8 @@ vector<int> findDensestSubgraph(const vector<vector<int>>& adj) {
 
     vector<int> densestSubgraph {};
     
-    while (u - l > 1.0 / (1.0 * n * (n - 1))) {
+    double thresh = max(1e-6, 1.0 / (1.0 * n * (n - 1)));
+    while (u - l > thresh) {
         double alpha = l + (u - l) / 2.0;        
         cout << "Building flow network with alpha = " << alpha << endl;
 
@@ -254,7 +280,7 @@ vector<int> findDensestSubgraph(const vector<vector<int>>& adj) {
 
         // double maxflow = edmondsKarp(s, t, fn);
         double maxflow = dinic(s, t, fn);
-        cout << "Max flow = " << maxflow << endl;
+        // cout << "Max flow = " << maxflow << endl;
 
         vector<bool> reachable = minCutReachable(s, fn);
 
@@ -315,7 +341,7 @@ vector<vector<int>> buildGraphFromInput(const string& filename) {
     return graph;
 }
 
-void display_memory_usage() {
+void display_memory_usage(ostream& out) {
     struct rusage usage;
     getrusage(RUSAGE_SELF, &usage);
 
@@ -325,33 +351,63 @@ void display_memory_usage() {
 
 int main(int argc, char* argv[]) {
 
-    string filename = "placeholder.txt";
+    string filename = "../datasets/email-Enron.txt";
     if (argc > 1)
         filename = argv[1];
 
     vector<vector<int>> adj = buildGraphFromInput(filename);
+
+    ostream* out = &cout;
+    ofstream file;
+
+    if (argc > 2) {
+        file.open(argv[2]);
+        out = &file;
+    }
 
     auto start = chrono::high_resolution_clock::now();
     vector<int> DS = findDensestSubgraph(adj);
     auto end = chrono::high_resolution_clock::now();
 
     chrono::duration<double> diff = end - start;
-    cout << "Densest Subgraph found in " << diff.count() << " seconds." << endl;
+    *out << "Densest Subgraph found in " << diff.count() << " seconds." << endl;
 
-    display_memory_usage();
+    display_memory_usage(*out);
 
     // get only neighbours in DS
     unordered_set<int> inDS(DS.begin(), DS.end());
 
-    // output
-    cout << "Nodes which are part of densest subgraph: \n";
-    for (const int& node: DS) {
-        cout << "Node: " << node << " , connected to vertices: ";
-        for (const int& nbr: adj[node])
-            if (inDS.count(nbr))
-                cout << nbr << " ";
-        cout << endl;
+    // calc density
+    int triangle_count = 0;
+
+    for (const int& u: DS) {
+        for (int v : adj[u]) if (v > u && inDS.count(v)) {
+            int i = 0, j = 0;
+            const auto& au = adj[u];
+            const auto& av = adj[v];
+
+            while (i < au.size() && j < av.size()) {
+                if (au[i] == av[j]) {
+                    int w = au[i];
+                    if (w > v && inDS.count(w)) {
+                        triangle_count++;
+                    }
+                    i++; j++;
+                } else if (au[i] < av[j]) i++;
+                else j++;
+            }
+        }
     }
+
+    double density = DS.empty() ? 0.0 : (double)triangle_count / DS.size();
+
+    // output
+    *out << "Clique density of densest subgraph: " << density << endl;
+    *out << "Nodes which are part of densest subgraph: \n";
+    for (const int& node : DS) {
+        *out << node << " ";
+    }
+    *out << endl;
 
     return 0;
 }
