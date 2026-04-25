@@ -6,7 +6,7 @@ Four algorithms for finding the densest subgraph:
 |---|---|---|
 | `core_exact` | `dense-subgraph/core_exact.cpp` | Dense Subgraph |
 | `exact` | `dense-subgraph/exact.cpp` | Dense Subgraph |
-| `exact_parallel` | `dense-subgraph/exact_parallel.cpp` | Dense Subgraph |
+| `greedy` | `flowless/greedy.cpp` | Flowless |
 | `greedy_plus_plus` | `flowless/greedy_plus_plus.cpp` | Flowless |
 
 ## Prerequisites
@@ -26,7 +26,7 @@ Or build individually:
 ```bash
 make core_exact
 make exact
-make exact_parallel
+make greedy
 make greedy_plus_plus
 ```
 
@@ -57,13 +57,13 @@ make run-exact INPUT=path/to/graph.txt OUTPUT=path/to/output.txt
 
 If `output_file` is omitted, results are printed to stdout.
 
-### exact_parallel
+### greedy
 
 ```bash
-make run-exact_parallel INPUT=path/to/graph.txt OUTPUT=path/to/output.txt
+make run-greedy INPUT=path/to/graph.txt OUTPUT=path/to/output.txt
 
 # binary directly
-./dense-subgraph/exact_parallel <input_file> [output_file]
+./flowless/exact_parallel <input_file> [output_file]
 ```
 
 If `output_file` is omitted, results are printed to stdout.
